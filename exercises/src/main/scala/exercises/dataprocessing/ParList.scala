@@ -9,7 +9,56 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 //  List(9,10)             // partition 2
 // )
 // Note that we used the `apply` method with a varargs argument.
-case class ParList[A](partitions: List[List[A]])
+case class ParList[A](partitions: List[List[A]]) {
+  def isEmpty: Boolean = partitions.forall(_.isEmpty)
+
+  def toList: List[A] = partitions.flatten
+
+  def map[To](update: A => To): ParList[To] =
+    ParList(partitions.map(partition => partition.map(update)))
+
+  def monoFoldLeft(param: Monoid[A]): A =
+    partitions.map(partition => partition.foldLeft(param.default)(param.combine)).foldLeft(param.default)(param.combine)
+
+  def size: Int = foldMap(_ => 1)(Monoid.sumInt)
+
+  def mapReduce2[To](update: A => To)(monoid: Monoid[To]): To =
+    map(update).monoFoldLeft(monoid)
+
+  def foldMap[To](update: A => To)(monoid: Monoid[To]): To =
+    partitions
+      .map { partition =>
+        partition.foldLeft(monoid.default)((state: To, value: A) => monoid.combine(state, update(value)))
+      }
+      .foldLeft(monoid.default)(monoid.combine)
+
+  def parFoldMap[To](update: A => To)(monoid: Monoid[To])(executionContext: ExecutionContext): To = {
+    def foldPartition(partition: List[A]): Future[To] =
+      Future {
+        // println(s"[${Thread.currentThread().getName}] Start")
+        val result = partition.foldLeft(monoid.default)((state: To, value: A) => monoid.combine(state, update(value)))
+         // println(s"[${Thread.currentThread().getName}] completed")
+        result
+      }(executionContext)
+
+    partitions
+      .map(foldPartition)
+      .map(task => Await.result(task, Duration.Inf))
+      .foldLeft(monoid.default)(monoid.combine)
+  }
+
+  def parFoldMapMine[To](update: A => To)(monoid: Monoid[To])(executionContext: ExecutionContext): To = {
+    val future: Future[List[To]] = Future {
+      partitions
+        .map { partition =>
+          partition.foldLeft(monoid.default)((state: To, value: A) => monoid.combine(state, update(value)))
+        }
+    }(executionContext)
+    val intermediateResult: Seq[To] = Await.result(future, Duration.Inf)
+    intermediateResult.foldLeft(monoid.default)(monoid.combine)
+  }
+
+}
 
 object ParList {
   // The `*` at the end of List[A] is called a varargs. It means we can put as many arguments
