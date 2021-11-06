@@ -1,8 +1,8 @@
 package exercises.action
 
-import java.time.{Instant, LocalDate}
-
 import org.scalacheck.{Arbitrary, Gen}
+
+import java.time.{Instant, LocalDate}
 
 object DateGenerator {
   val dateGen: Gen[LocalDate] =
@@ -16,7 +16,7 @@ object DateGenerator {
   val instantGen: Gen[Instant] =
     for {
       seconds <- Gen.choose(Instant.MIN.getEpochSecond, Instant.MAX.getEpochSecond)
-      nano    <- Gen.choose(0, 1000_000_000L)
+      nano <- Gen.choose(0, 1000_000_000L)
     } yield Instant.ofEpochSecond(seconds, nano)
 
   implicit val instantArb: Arbitrary[Instant] =
