@@ -16,10 +16,10 @@ object UserCreationExercises {
   // val dateOfBirthFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy")
 
   case class User(
-      name: String,
-      dateOfBirth: LocalDate,
-      subscribedToMailingList: Boolean,
-      createdAt: Instant
+    name: String,
+    dateOfBirth: LocalDate,
+    subscribedToMailingList: Boolean,
+    createdAt: Instant
   )
 
   // 1. Implement `readSubscribeToMailingList` which asks if the user wants to
@@ -43,13 +43,12 @@ object UserCreationExercises {
   def formatYesNo(yesNo: Boolean): String =
     if (yesNo) "Y" else "N"
 
-  def parseYesNo(subscriptionAnswer: String): Boolean = {
+  def parseYesNo(subscriptionAnswer: String): Boolean =
     subscriptionAnswer match {
       case "Y" => true
       case "N" => false
       case _   => throw new IllegalArgumentException("Invalid input")
     }
-  }
 
   // 2. How can we test `readSubscribeToMailingList`?
   // We cannot use example-based tests or property-based tests
@@ -106,8 +105,8 @@ object UserCreationExercises {
   }
 
   def readUserOriginal(console: Console, clock: Clock): User = {
-    val name: String = readName(console)
-    val birth: LocalDate = readDateOfBirth(console)
+    val name: String      = readName(console)
+    val birth: LocalDate  = readDateOfBirth(console)
     val wantsSub: Boolean = readSubscribeToMailingList(console)
     val user = User(
       name = name,
@@ -120,8 +119,8 @@ object UserCreationExercises {
   }
 
   def readUser(console: Console, clock: Clock): User = {
-    val name: String = readName(console)
-    val birth: LocalDate = readDateOfBirthRetry(console, 3)
+    val name: String      = readName(console)
+    val birth: LocalDate  = readDateOfBirthRetry(console, 3)
     val wantsSub: Boolean = readSubscribeToMailingListRetry(console, 3)
     val user = User(
       name = name,
@@ -154,6 +153,41 @@ object UserCreationExercises {
   // Note: `maxAttempt` must be greater than 0, if not you should throw an exception.
   // Note: You can implement the retry logic using recursion or a for/while loop. I suggest
   //       trying both possibilities.
+  def readSubscribeToMailingListRetry(console: Console, maxAttempt: Int): Boolean =
+    retry[Boolean](maxAttempt) {
+      console.writeLine("Would you like to subscribe to our mailing list? [Y/N]")
+      val input = console.readLine()
+      onError(parseYesNo(input),
+        _=>console.writeLine("Incorrect format, enter \"Y\" for Yes or \"N\" for \"No\""))
+    }
+
+  def readSubscribeToMailingListRetry2(console: Console, maxAttempt: Int): Boolean =
+    retry[Boolean](maxAttempt) {
+      console.writeLine("Would you like to subscribe to our mailing list? [Y/N]")
+      val input = console.readLine()
+      Try(parseYesNo(input)) match {
+        case Success(value) => value
+        case Failure(exception) =>
+          console.writeLine("Incorrect format, enter \"Y\" for Yes or \"N\" for \"No\"")
+          throw exception
+      }
+    }
+
+  @tailrec
+  def readSubscribeToMailingListRetryFirst(console: Console, maxAttempt: Int): Boolean = {
+    require(maxAttempt > 0, "Invalid 'maxAttempt' attribute")
+
+    console.writeLine("Would you like to subscribe to our mailing list? [Y/N]")
+    val input = console.readLine()
+    Try(parseYesNo(input)) match {
+      case Success(value) => value
+      case Failure(exception) =>
+        console.writeLine("Incorrect format, enter \"Y\" for Yes or \"N\" for \"No\"")
+        if (maxAttempt == 1) throw exception
+        else readSubscribeToMailingListRetryFirst(console, maxAttempt - 1)
+    }
+  }
+
   @tailrec
   def readSubscribeToMailingListRetryMine(console: Console, maxAttempt: Int): Boolean = {
     require(maxAttempt > 0, "Invalid 'maxAttempt' attribute")
@@ -165,21 +199,6 @@ object UserCreationExercises {
         console.writeLine("Incorrect format, enter \"Y\" for Yes or \"N\" for \"No\"")
         readSubscribeToMailingListRetryMine(console, maxAttempt - 1)
       case Success(value) => value
-    }
-  }
-
-  @tailrec
-  def readSubscribeToMailingListRetry(console: Console, maxAttempt: Int): Boolean = {
-    require(maxAttempt > 0, "Invalid 'maxAttempt' attribute")
-
-    console.writeLine("Would you like to subscribe to our mailing list? [Y/N]")
-    val input = console.readLine()
-    Try(parseYesNo(input)) match {
-      case Success(value) => value
-      case Failure(exception) =>
-        console.writeLine("Incorrect format, enter \"Y\" for Yes or \"N\" for \"No\"")
-        if (maxAttempt == 1) throw exception
-        else readSubscribeToMailingListRetry(console, maxAttempt - 1)
     }
   }
 
@@ -198,8 +217,36 @@ object UserCreationExercises {
   // [Prompt] Incorrect format, for example enter "18-03-2001" for 18th of March 2001
   // Throws an exception because the user only had 1 attempt and they entered an invalid input.
   // Note: `maxAttempt` must be greater than 0, if not you should throw an exception.
-  @tailrec
   def readDateOfBirthRetry(console: Console, maxAttempt: Int): LocalDate = {
+    retry[LocalDate](maxAttempt) {
+      console.writeLine("What's your date of birth? [dd-mm-yyyy]")
+      val input: String = console.readLine()
+      onError(LocalDate.parse(input, dateOfBirthFormatter),
+        _ => console.writeLine(
+          "Incorrect format, for example enter \"18-03-2001\" for 18th of March 2001"
+        ))
+    }
+  }
+
+
+  def readDateOfBirthRetry2(console: Console, maxAttempt: Int): LocalDate = {
+    retry[LocalDate](maxAttempt) {
+      console.writeLine("What's your date of birth? [dd-mm-yyyy]")
+      val input: String = console.readLine()
+      Try(LocalDate.parse(input, dateOfBirthFormatter)) match {
+        case Success(value) => value
+        case Failure(exception) =>
+          console.writeLine(
+            "Incorrect format, for example enter \"18-03-2001\" for 18th of March 2001"
+          )
+          throw exception
+      }
+    }
+  }
+
+
+  @tailrec
+  def readDateOfBirthRetryOrig(console: Console, maxAttempt: Int): LocalDate = {
     require(maxAttempt > 0, "Invalid 'maxAttempt' attribute")
 
     console.writeLine("What's your date of birth? [dd-mm-yyyy]")
@@ -211,7 +258,7 @@ object UserCreationExercises {
           "Incorrect format, for example enter \"18-03-2001\" for 18th of March 2001"
         )
         if (maxAttempt == 1) throw exception
-        else readDateOfBirthRetry(console, maxAttempt - 1)
+        else readDateOfBirthRetryOrig(console, maxAttempt - 1)
     }
   }
 
