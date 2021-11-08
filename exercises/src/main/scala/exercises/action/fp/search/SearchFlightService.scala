@@ -25,8 +25,18 @@ object SearchFlightService {
   //       You can also defined tests for `SearchResult` in `SearchResultTest`
   def fromTwoClients(client1: SearchFlightClient, client2: SearchFlightClient): SearchFlightService =
     new SearchFlightService {
-      def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
-        ???
+      def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] = {
+        def searchByClient(client: SearchFlightClient): IO[List[Flight]] =
+          client
+            .search(from, to, date)
+            .handleErrorWith(ex => IO.debug(s"Error occurred: $ex") andThen IO(Nil))
+
+        for {
+          s1 <- searchByClient(client1)
+          s2 <- searchByClient(client2)
+          // combinedFlights = (s1 ++ s2).sorted(SearchResult.bestOrdering) || SearchResult.apply already sorts
+        } yield SearchResult(s1 ++ s2)
+      }
 
     }
 
