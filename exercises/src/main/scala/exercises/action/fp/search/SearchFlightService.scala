@@ -23,22 +23,37 @@ object SearchFlightService {
   // (see `SearchResult` companion object).
   // Note: A example based test is defined in `SearchFlightServiceTest`.
   //       You can also defined tests for `SearchResult` in `SearchResultTest`
-  def fromTwoClients(client1: SearchFlightClient, client2: SearchFlightClient): SearchFlightService =
+  def fromTwoClients(client1: SearchFlightClient, client2: SearchFlightClient)(
+    ec: ExecutionContext
+  ): SearchFlightService =
     new SearchFlightService {
-      def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] = {
+      override def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] = {
         def searchByClient(client: SearchFlightClient): IO[List[Flight]] =
           client
             .search(from, to, date)
             .handleErrorWith(ex => IO.debug(s"Error occurred: $ex") andThen IO(Nil))
 
-        for {
-          s1 <- searchByClient(client1)
-          s2 <- searchByClient(client2)
-          // combinedFlights = (s1 ++ s2).sorted(SearchResult.bestOrdering) || SearchResult.apply already sorts
-        } yield SearchResult(s1 ++ s2)
+        searchByClient(client1)
+          .parZip(searchByClient(client2))(ec)
+          .map(lists => SearchResult(lists._1 ++ lists._2))
       }
-
     }
+
+//  def fromTwoClients(client1: SearchFlightClient, client2: SearchFlightClient): SearchFlightService =
+//    new SearchFlightService {
+//      def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] = {
+//        def searchByClient(client: SearchFlightClient): IO[List[Flight]] =
+//          client
+//            .search(from, to, date)
+//            .handleErrorWith(ex => IO.debug(s"Error occurred: $ex") andThen IO(Nil))
+//
+//        for {
+//          s1 <- searchByClient(client1)
+//          s2 <- searchByClient(client2)
+//          // combinedFlights = (s1 ++ s2).sorted(SearchResult.bestOrdering) || SearchResult.apply already sorts
+//        } yield SearchResult(s1 ++ s2)
+//      }
+//    }
 
   // 2. Several clients can return data for the same flight. For example, if we combine data
   // from British Airways and lastminute.com, lastminute.com may include flights from British Airways.
@@ -54,10 +69,54 @@ object SearchFlightService {
   // a list of `SearchFlightClient`.
   // Note: You can use a recursion/loop/foldLeft to call all the clients and combine their results.
   // Note: We can assume `clients` to contain less than 100 elements.
-  def fromClients(clients: List[SearchFlightClient]): SearchFlightService =
+  def fromClients(clients: List[SearchFlightClient])(ec: ExecutionContext): SearchFlightService =
     new SearchFlightService {
-      def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
-        ???
+      def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] = {
+        def searchByClient(client: SearchFlightClient): IO[List[Flight]] =
+          client
+            .search(from, to, date)
+            .handleErrorWith(ex => IO.debug(s"Error occurred: $ex") andThen IO(Nil))
+
+//        def loop(remainingClients: List[SearchFlightClient]): IO[List[Flight]] =
+//          remainingClients match {
+//            case Nil => IO(Nil)
+//            case ::(head, next) =>
+//              for {
+//                s1 <- searchByClient(head)
+//                s2 <- loop(next)
+//              } yield (s1 ++ s2)
+//          }
+//        loop(clients).map(SearchResult(_))
+        /*
+        clients.map(searchByClient) // List[IO[List[Flight]]]
+        // List[IO[List[Flight]]]  --> IO[List[List[Flight]]] --> IO[List[Flight]]
+        IO.sequence(clients.map(searchByClient)) // IO[List[List[Flight]]]
+        IO.sequence(clients.map(searchByClient)).map(_.flatten) // IO[List[Flight]]
+         */
+
+//        IO.sequence(clients.map(searchByClient))
+//          .map(_.flatten)
+//          .map(SearchResult(_)) // IO[SearchResult]
+
+//        clients.map(searchByClient)
+//          .sequence // Implicit extension methods
+//          .map(_.flatten)
+//          .map(SearchResult(_))
+
+        // map + flatten == flatMap
+        // map + fold == foldMap
+        // map + sequence == transverse
+//        clients
+//          .traverse(searchByClient) // map + sequence
+//          .map(_.flatten)
+//          .map(SearchResult(_))
+
+        clients
+          .parTraverse(searchByClient)(ec)
+          .map(_.flatten)
+          .map(SearchResult(_))
+
+      }
     }
 
   // 5. Refactor `fromClients` using `sequence` or `traverse` from the `IO` companion object.
