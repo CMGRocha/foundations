@@ -1,6 +1,7 @@
 package exercises.errorhandling.project
 
 import exercises.errorhandling.NEL
+import exercises.errorhandling.project.OrderStatus.{Checkout, Delivered, Draft, Submitted}
 import org.scalacheck.Gen
 
 import java.time.{Duration, Instant}
@@ -32,7 +33,7 @@ object OrderGenerator {
       itemId   <- itemIdGen
       quantity <- Gen.chooseNum(1, 999999)
       price    <- Gen.chooseNum(0.0001, 999999999)
-    } yield Item(itemId, quantity, price)
+    } yield Item(ItemID(itemId), quantity, price)
 
   val addressGen: Gen[Address] =
     for {
@@ -45,7 +46,7 @@ object OrderGenerator {
       orderId   <- orderIdGen
       createdAt <- instantGen
       items     <- Gen.listOf(itemGen)
-    } yield Order(orderId, "Draft", items, None, createdAt, None, None)
+    } yield Order(OrderID(orderId), Draft(items), createdAt)
 
   val checkoutGen: Gen[Order] =
     for {
@@ -53,7 +54,11 @@ object OrderGenerator {
       createdAt <- instantGen
       items     <- Gen.listOf(itemGen)
       address   <- Gen.option(addressGen)
-    } yield Order(orderId, "Checkout", items, address, createdAt, None, None)
+    } yield Order(
+      OrderID(orderId),
+      Checkout(NEL(items.head, items.tail), address),
+      createdAt
+    )
 
   val submittedGen: Gen[Order] =
     for {
@@ -63,7 +68,7 @@ object OrderGenerator {
       address   <- addressGen
       delay     <- durationGen
       submittedAt = createdAt.plus(delay)
-    } yield Order(orderId, "Submitted", items, Some(address), createdAt, Some(submittedAt), None)
+    } yield Order(OrderID(orderId), Submitted(NEL(items.head, items.tail), address, submittedAt), createdAt)
 
   val deliveredGen: Gen[Order] =
     for {
@@ -75,7 +80,11 @@ object OrderGenerator {
       submittedAt = createdAt.plus(delay1)
       delay2 <- durationGen
       deliveredAt = submittedAt.plus(delay2)
-    } yield Order(orderId, "Delivered", items, Some(address), createdAt, Some(submittedAt), Some(deliveredAt))
+    } yield Order(
+      OrderID(orderId),
+      Delivered(NEL(items.head, items.tail), address, submittedAt, deliveredAt),
+      createdAt
+    )
 
   val orderGen: Gen[Order] =
     Gen.oneOf(draftGen, checkoutGen, submittedGen, deliveredGen)

@@ -1,3 +1,3 @@
 package exercises.errorhandling.project
 
-case class Item(id: String, quantity: Int, unitPrice: Double)
+case class Item(id: ItemID, quantity: Int, unitPrice: BigDecimal)
